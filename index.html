@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disk Scheduling Visualizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS to hide the up/down arrows on number inputs */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 p-4 md:p-8 min-h-screen flex flex-col items-center justify-center">
+
+<div class="w-full max-w-5xl bg-white p-8 md:p-10 rounded-2xl shadow-xl border border-slate-200">
+    <h1 class="text-4xl font-extrabold text-center text-slate-800 mb-10 tracking-tight">
+        Disk Scheduling Analytics
+    </h1>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+        <div class="flex flex-col justify-between">
+            <label for="head" class="block font-bold text-slate-700 mb-2 tracking-wide">Initial R/W Head:</label>
+            <input type="number" id="head" value="50" 
+                   class="w-full p-4 text-lg border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-slate-50 transition-all">
+        </div>
+
+        <div class="flex flex-col justify-between">
+            <label for="algo" class="block font-bold text-slate-700 mb-2 tracking-wide">Algorithm:</label>
+            <select id="algo" 
+                    class="w-full p-4 text-lg border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-white transition-all cursor-pointer">
+                <option value="FCFS">FCFS (First Come First Serve)</option>
+                <option value="SSTF">SSTF (Shortest Seek Time First)</option>
+                <option value="SCAN">SCAN</option>
+                <option value="C-SCAN">C-SCAN</option>
+                <option value="LOOK">LOOK</option>
+                <option value="C-LOOK">C-LOOK</option>
+            </select>
+        </div>
+
+        <div class="flex flex-col justify-between">
+            <label for="seek_rate" class="block font-bold text-slate-700 mb-2 tracking-wide">Seek Rate (ms/track):</label>
+            <input type="number" id="seek_rate" value="2" step="0.1" 
+                   class="w-full p-4 text-lg border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-slate-50 transition-all">
+        </div>
+    </div>
+
+    <div class="mb-10 flex flex-col justify-between">
+        <label for="requests" class="block font-bold text-slate-700 mb-2 tracking-wide">Request Queue (Comma separated):</label>
+        <input type="text" id="requests" value="82, 170, 43, 140, 24, 16, 190" 
+               class="w-full p-4 text-lg border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 bg-slate-50 font-mono transition-all tracking-wider">
+    </div>
+
+    <button onclick="calculate()" 
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-lg py-4 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-blue-500/40 transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-blue-500/50">
+        Analyze & Visualize
+    </button>
+
+    <div id="output" class="hidden mt-12">
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl border border-blue-200 text-center shadow-sm flex flex-col justify-between">
+                <div class="text-sm text-blue-700 font-black uppercase tracking-widest mb-2">Total Movement</div>
+                <div class="text-4xl font-black text-blue-900"><span id="valMovement">0</span> <span class="text-lg font-bold text-blue-700">tracks</span></div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 p-6 rounded-2xl border border-indigo-200 text-center shadow-sm flex flex-col justify-between">
+                <div class="text-sm text-indigo-700 font-black uppercase tracking-widest mb-2">Avg Seek Distance</div>
+                <div class="text-4xl font-black text-indigo-900"><span id="valAvgSeek">0</span> <span class="text-lg font-bold text-indigo-700">per req</span></div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-6 rounded-2xl border border-emerald-200 text-center shadow-sm flex flex-col justify-between">
+                <div class="text-sm text-emerald-700 font-black uppercase tracking-widest mb-2">Estimated Time</div>
+                <div class="text-4xl font-black text-emerald-900"><span id="valTime">0</span> <span class="text-lg font-bold text-emerald-700">ms</span></div>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 text-slate-200 p-6 rounded-2xl mb-8 shadow-inner overflow-x-auto border border-slate-700">
+            <span class="font-black text-blue-400 tracking-wider uppercase text-sm">Path Sequence:</span> 
+            <span id="valSequence" class="font-mono font-bold tracking-widest ml-3 text-lg"></span>
+        </div>
+        
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-md">
+            <canvas id="diskChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="mt-8 text-center text-slate-500 font-medium">
+    Developed by 
+    <a href="https://arjunrenvon.vercel.app" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 hover:underline transition-colors font-bold tracking-wide">Arjunren</a> |
+    <a href="https://github.com/Arjunren" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 hover:underline transition-colors font-bold tracking-wide">GitHub</a>
+</div>
+
+<script>
+    let chartInstance = null;
+    const MAX_TRACK = 199;
+
+    function calculateSeekTime(sequence) {
+        let total = 0;
+        for (let i = 1; i < sequence.length; i++) {
+            total += Math.abs(sequence[i] - sequence[i - 1]);
+        }
+        return total;
+    }
+
+    function calculate() {
+        const head = parseInt(document.getElementById('head').value);
+        const algo = document.getElementById('algo').value;
+        const seekRate = parseFloat(document.getElementById('seek_rate').value);
+        
+        // Parse requests into an array of integers
+        const rawRequests = document.getElementById('requests').value;
+        const requests = rawRequests.split(',')
+                                    .map(x => x.trim())
+                                    .filter(x => x !== "" && !isNaN(x))
+                                    .map(Number);
+
+        let sequence = [];
+        let reqs = [...requests].sort((a, b) => a - b);
+        let left = reqs.filter(r => r < head);
+        let right = reqs.filter(r => r >= head);
+
+        // Core Scheduling Algorithms written in JavaScript
+        switch (algo) {
+            case 'FCFS':
+                sequence = [head, ...requests];
+                break;
+                
+            case 'SSTF':
+                sequence = [head];
+                let pending = [...requests];
+                let curr = head;
+                
+                while (pending.length > 0) {
+                    let closestIdx = 0;
+                    let minDiff = Math.abs(pending[0] - curr);
+                    
+                    for (let i = 1; i < pending.length; i++) {
+                        let diff = Math.abs(pending[i] - curr);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closestIdx = i;
+                        }
+                    }
+                    curr = pending[closestIdx];
+                    sequence.push(curr);
+                    pending.splice(closestIdx, 1);
+                }
+                break;
+                
+            case 'SCAN':
+                // Assuming initial direction is UP
+                sequence = [head, ...right, MAX_TRACK, ...left.reverse()];
+                break;
+                
+            case 'C-SCAN':
+                if (right.length === 0 && left.length === 0) {
+                    sequence = [head];
+                } else {
+                    sequence = [head, ...right, MAX_TRACK, 0, ...left];
+                }
+                break;
+                
+            case 'LOOK':
+                sequence = [head, ...right, ...left.reverse()];
+                break;
+                
+            case 'C-LOOK':
+                sequence = [head, ...right, ...left];
+                break;
+        }
+
+        // Analytics Calculations
+        const totalMovement = calculateSeekTime(sequence);
+        const numRequests = requests.length;
+        const avgSeek = numRequests > 0 ? (totalMovement / numRequests).toFixed(2) : 0;
+        const totalTimeMs = (totalMovement * seekRate).toFixed(2);
+
+        // Update UI
+        const outputDiv = document.getElementById('output');
+        outputDiv.classList.remove('hidden');
+        outputDiv.classList.add('animate-fade-in');
+        
+        document.getElementById('valMovement').innerText = totalMovement;
+        document.getElementById('valAvgSeek').innerText = avgSeek;
+        document.getElementById('valTime').innerText = totalTimeMs;
+        document.getElementById('valSequence').innerText = sequence.join(' → ');
+
+        drawChart(sequence, algo);
+    }
+
+    function drawChart(sequence, algo) {
+        const ctx = document.getElementById('diskChart').getContext('2d');
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        const labels = sequence.map((_, index) => `Step ${index}`);
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `R/W Head Path (${algo})`,
+                    data: sequence,
+                    borderColor: '#3b82f6', 
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 4,
+                    pointBackgroundColor: '#f59e0b', 
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 7,
+                    pointHoverRadius: 10,
+                    fill: false,
+                    stepped: false,
+                    tension: 0.05 
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Track / Cylinder Number (0 - 199)', font: {size: 15, weight: 'bold'}, color: '#334155' },
+                        min: 0,
+                        max: 199,
+                        grid: { color: '#e2e8f0', lineWidth: 2 } 
+                    },
+                    y: {
+                        title: { display: true, text: 'Sequence Step', font: {size: 15, weight: 'bold'}, color: '#334155' },
+                        reverse: true,
+                        grid: { color: '#f8fafc', borderDash: [8, 4] } 
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        padding: 14,
+                        titleFont: { size: 15 },
+                        bodyFont: { size: 15, weight: 'bold' },
+                        callbacks: {
+                            label: function(context) {
+                                return ` Track: ${context.raw}`;
+                            }
+                        }
+                    },
+                    legend: {
+                        labels: { color: '#1e293b', font: { size: 14, weight: 'bold' } }
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
